@@ -1,4 +1,4 @@
-# TSS API
+# TSS
 
 Solana threshold signature server using MuSig2 multi-party signing.
 
