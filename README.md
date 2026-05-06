@@ -30,16 +30,9 @@ The API supports three transaction types:
 - `models.rs` - Request/response structs for all API endpoints
 - `error.rs` - Error types and conversions
 
-## Installation
-
-```toml
-[dependencies]
-solana-tss-api-backend = "0.1.0"
-```
-
-Or from source:
+Build from source:
 ```bash
-git clone <repository>
+git clone https://github.com/acegikmoo/TSS
 cargo build --release
 ```
 
@@ -101,16 +94,3 @@ curl -X POST http://localhost:8000/api/aggregate_signatures \
 - **Blockhash expiry**: Recent blockhash must be valid; client must fetch fresh blockhash before each transaction
 - **SPL tokens**: Requires specifying `token_mint` and `decimals` for token transfers
 - **Stake accounts**: Uses seed-derived addresses with `create_with_seed`
-
-## Security
-
-** UNAUDITED **. This code implements cryptographic threshold signatures but has not undergone external security review. Production use requires:
-
-- Independent cryptographic audit
-- Secure key distribution for participant shares
-- Network-level transport security (HTTPS/TLS)
-- Rate limiting and request validation
-- Input sanitization beyond basic parsing
-
-Use on mainnet at your own risk.
-
