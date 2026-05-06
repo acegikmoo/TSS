@@ -1,5 +1,5 @@
 [package]
-name = "solana-tss-api-backend"
+name = "TSS"
 version = "0.1.0"
 edition = "2024"
 

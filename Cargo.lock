@@ -13,6 +13,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "TSS"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bs58",
+ "curv-kzen",
+ "ed25519-dalek",
+ "multi-party-eddsa",
+ "poem",
+ "poem-openapi",
+ "rand 0.7.3",
+ "serde",
+ "serde_json",
+ "solana-client",
+ "solana-sdk",
+ "solana-streamer",
+ "solana-test-validator",
+ "spl-associated-token-account 1.1.3",
+ "spl-memo 3.0.1",
+ "spl-token 3.5.0",
+ "tokio",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7083,30 +7107,6 @@ dependencies = [
  "spl-token 4.0.0",
  "spl-token-2022 1.0.0",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "solana-tss-api-backend"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bs58",
- "curv-kzen",
- "ed25519-dalek",
- "multi-party-eddsa",
- "poem",
- "poem-openapi",
- "rand 0.7.3",
- "serde",
- "serde_json",
- "solana-client",
- "solana-sdk",
- "solana-streamer",
- "solana-test-validator",
- "spl-associated-token-account 1.1.3",
- "spl-memo 3.0.1",
- "spl-token 3.5.0",
- "tokio",
 ]
 
 [[package]]
