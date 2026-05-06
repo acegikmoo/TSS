@@ -462,9 +462,10 @@ async fn spl_send_single(req: Json<SplSendSingleRequest>) -> impl IntoResponse {
 
     // Convert amount to proper token units
     let token_amount = (req.amount * 10_f64.powi(req.decimals as i32)) as u64;
-    
+
     //Derive ATAs
-    let from_ata = spl_associated_token_account::get_associated_token_address(&keypair.pubkey(), &token_mint);
+    let from_ata =
+        spl_associated_token_account::get_associated_token_address(&keypair.pubkey(), &token_mint);
     let to_ata = spl_associated_token_account::get_associated_token_address(&to, &token_mint);
 
     //checking if destination ATA exists
@@ -473,16 +474,17 @@ async fn spl_send_single(req: Json<SplSendSingleRequest>) -> impl IntoResponse {
         Err(_) => false,
     };
 
-let mut instructions = vec![];
+    let mut instructions = vec![];
 
     // Create destination ATA if it doesn't exist
     if !to_ata_exists {
-        let create_ata_instruction = spl_associated_token_account::instruction::create_associated_token_account(
-            &keypair.pubkey(), // Payer
-            &to,               // Owner
-            &token_mint,       // Mint
-            &spl_token::id(),  // Token program
-        );
+        let create_ata_instruction =
+            spl_associated_token_account::instruction::create_associated_token_account(
+                &keypair.pubkey(), // Payer
+                &to,               // Owner
+                &token_mint,       // Mint
+                &spl_token::id(),  // Token program
+            );
         instructions.push(create_ata_instruction);
     }
 
@@ -527,8 +529,8 @@ let mut instructions = vec![];
     };
 
     // Confirm transaction
-    if let Err(e) = rpc_client
-        .confirm_transaction_with_spinner(&sig, &recent_hash, rpc_client.commitment())
+    if let Err(e) =
+        rpc_client.confirm_transaction_with_spinner(&sig, &recent_hash, rpc_client.commitment())
     {
         return error_response(Error::ConfirmingTransactionFailed(e).to_string());
     }
@@ -687,12 +689,21 @@ async fn stake_account(req: Json<StakeAccountRequest>) -> impl IntoResponse {
         Err(e) => return error_response(e.to_string()),
     };
 
+    let vote_account = match parse_pubkey(&req.validator_vote_accont) {
+        Ok(vc) => vc,
+        Err(e) => return error_response(e.to_string()),
+    };
+
     let rpc_client = RpcClient::new(req.net.get_cluster_url().to_string());
-    let mut tx =
-        match create_stake_account_transaction(req.stake_amount, &req.seed, &keypair.pubkey()) {
-            Ok(tx) => tx,
-            Err(e) => return error_response(e.to_string()),
-        };
+    let mut tx = match create_stake_account_transaction(
+        req.stake_amount,
+        &req.seed,
+        &keypair.pubkey(),
+        &vote_account,
+    ) {
+        Ok(tx) => tx,
+        Err(e) => return error_response(e.to_string()),
+    };
 
     let recent_hash = match rpc_client.get_latest_blockhash() {
         Ok(hash) => hash,
@@ -819,24 +830,14 @@ async fn withdraw_stake(req: Json<WithdrawStakeRequest>) -> impl IntoResponse {
 }
 
 #[handler]
-async fn agg_stake_step_one(req: Json<AggStakeStepOneRequest>) -> impl IntoResponse {
+async fn agg_stake_step_two(req: Json<AggStakeStepTwoRequest>) -> impl IntoResponse {
     let keypair = match parse_keypair_bs58(&req.keypair) {
         Ok(kp) => kp,
         Err(e) => return error_response(e.to_string()),
     };
 
-    let (first_msg, secret) = step_one(keypair);
-    let response = AggStakeStepOneResponse {
-        message_1: first_msg.serialize_bs58(),
-        secret_state: secret.serialize_bs58(),
-    };
-    success_response(response)
-}
-
-#[handler]
-async fn agg_stake_step_two(req: Json<AggStakeStepTwoRequest>) -> impl IntoResponse {
-    let keypair = match parse_keypair_bs58(&req.keypair) {
-        Ok(kp) => kp,
+    let vote_account = match parse_pubkey(&req.validator_vote_accont) {
+        Ok(vc) => vc,
         Err(e) => return error_response(e.to_string()),
     };
 
@@ -874,6 +875,7 @@ async fn agg_stake_step_two(req: Json<AggStakeStepTwoRequest>) -> impl IntoRespo
         keypair,
         req.stake_amount,
         req.seed.clone(),
+        vote_account,
         block_hash,
         keys,
         first_messages,
@@ -885,23 +887,6 @@ async fn agg_stake_step_two(req: Json<AggStakeStepTwoRequest>) -> impl IntoRespo
 
     let response = AggStakeStepTwoResponse {
         partial_signature: sig.serialize_bs58(),
-    };
-    success_response(response)
-}
-
-#[handler]
-async fn agg_deactivate_stake_step_one(
-    req: Json<AggDeactivateStakeStepOneRequest>,
-) -> impl IntoResponse {
-    let keypair = match parse_keypair_bs58(&req.keypair) {
-        Ok(kp) => kp,
-        Err(e) => return error_response(e.to_string()),
-    };
-
-    let (first_msg, secret) = step_one(keypair);
-    let response = AggDeactivateStakeStepOneResponse {
-        message_1: first_msg.serialize_bs58(),
-        secret_state: secret.serialize_bs58(),
     };
     success_response(response)
 }
@@ -964,23 +949,6 @@ async fn agg_deactivate_stake_step_two(
 
     let response = AggDeactivateStakeStepTwoResponse {
         partial_signature: sig.serialize_bs58(),
-    };
-    success_response(response)
-}
-
-#[handler]
-async fn agg_withdraw_stake_step_one(
-    req: Json<AggWithdrawStakeStepOneRequest>,
-) -> impl IntoResponse {
-    let keypair = match parse_keypair_bs58(&req.keypair) {
-        Ok(kp) => kp,
-        Err(e) => return error_response(e.to_string()),
-    };
-
-    let (first_msg, secret) = step_one(keypair);
-    let response = AggWithdrawStakeStepOneResponse {
-        message_1: first_msg.serialize_bs58(),
-        secret_state: secret.serialize_bs58(),
     };
     success_response(response)
 }
@@ -1058,6 +1026,11 @@ async fn agg_withdraw_stake_step_two(
 async fn aggregate_stake_signatures(
     req: Json<AggregateStakeSignaturesRequest>,
 ) -> impl IntoResponse {
+    let vote_account = match parse_pubkey(&req.validator_vote_accont) {
+        Ok(vc) => vc,
+        Err(e) => return error_response(e.to_string()),
+    };
+
     let block_hash = match parse_hash(&req.recent_block_hash) {
         Ok(hash) => hash,
         Err(e) => return error_response(e.to_string()),
@@ -1086,6 +1059,7 @@ async fn aggregate_stake_signatures(
     let tx = match aggregate_stake_signatures_and_broadcast(
         req.stake_amount,
         req.seed.clone(),
+        vote_account,
         block_hash,
         keys,
         signatures,
@@ -1267,19 +1241,10 @@ async fn main() -> anyhow::Result<()> {
         .at("/api/stake", post(stake_account))
         .at("/api/deactivate_stake", post(deactivate_stake))
         .at("/api/withdraw_stake", post(withdraw_stake))
-        .at("/api/agg_stake_step_one", post(agg_stake_step_one))
         .at("/api/agg_stake_step_two", post(agg_stake_step_two))
-        .at(
-            "/api/agg_deactivate_stake_step_one",
-            post(agg_deactivate_stake_step_one),
-        )
         .at(
             "/api/agg_deactivate_stake_step_two",
             post(agg_deactivate_stake_step_two),
-        )
-        .at(
-            "/api/agg_withdraw_stake_step_one",
-            post(agg_withdraw_stake_step_one),
         )
         .at(
             "/api/agg_withdraw_stake_step_two",

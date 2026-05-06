@@ -302,6 +302,7 @@ pub fn stake_step_two(
     keypair: Keypair,
     stake_amount: u64,
     seed: String,
+    validator_vote_accont: Pubkey,
     recent_block_hash: Hash,
     keys: Vec<Pubkey>,
     first_messages: Vec<AggMessage1>,
@@ -312,11 +313,14 @@ pub fn stake_step_two(
         .map(|msg1| msg1.public_nonces.R)
         .collect();
 
+    // Generating the aggregate key together with the coefficient of the current keypair
     let aggkey = key_agg(keys.clone(), Some(keypair.pubkey()))?;
-    let aggpubkey = Pubkey::new(&*aggkey.agg_public_key.to_bytes(true));
+    let aggpubkey = Pubkey::new(&*aggkey.agg_public_key.to_bytes(true)); //aggpubkey is generated with coefficient
     let extended_kepair = ExpandedKeyPair::create_from_private_key(keypair.secret().to_bytes());
 
-    let mut tx = create_stake_account_transaction(stake_amount, &seed, &aggpubkey)?;
+    //creating unsigned transaction
+    let mut tx =
+        create_stake_account_transaction(stake_amount, &seed, &aggpubkey, &validator_vote_accont)?;
 
     let signer = PartialSigner {
         signer_private_nonce: secret_state.private_nonces,
@@ -345,10 +349,12 @@ pub fn deactivate_stake_step_two(
         .map(|msg1| msg1.public_nonces.R)
         .collect();
 
+    // Generating the aggregate key together with the coefficient of the current keypair
     let aggkey = key_agg(keys.clone(), Some(keypair.pubkey()))?;
     let aggpubkey = Pubkey::new(&*aggkey.agg_public_key.to_bytes(true));
     let extended_kepair = ExpandedKeyPair::create_from_private_key(keypair.secret().to_bytes());
 
+    //creating unsigned Transaction
     let mut tx = create_deactivate_stake_transaction(&stake_account, &aggpubkey);
 
     let signer = PartialSigner {
@@ -380,10 +386,12 @@ pub fn withdraw_stake_step_two(
         .map(|msg1| msg1.public_nonces.R)
         .collect();
 
+    // Generating the aggregate key together with the coefficient of the current keypair
     let aggkey = key_agg(keys.clone(), Some(keypair.pubkey()))?;
     let aggpubkey = Pubkey::new(&*aggkey.agg_public_key.to_bytes(true));
     let extended_kepair = ExpandedKeyPair::create_from_private_key(keypair.secret().to_bytes());
 
+    //creating unsigned Transaction
     let mut tx =
         create_withdraw_stake_transaction(&stake_account, &destination, &aggpubkey, amount);
 
@@ -403,13 +411,15 @@ pub fn withdraw_stake_step_two(
 pub fn aggregate_stake_signatures_and_broadcast(
     stake_amount: u64,
     seed: String,
+    validator_vote_accont: Pubkey,
     recent_block_hash: Hash,
     keys: Vec<Pubkey>,
     signatures: Vec<PartialSignature>,
 ) -> Result<Transaction, Error> {
-    let aggkey = key_agg(keys.clone(), None)?;
+    let aggkey = key_agg(keys, None)?;
     let aggpubkey = Pubkey::new(&*aggkey.agg_public_key.to_bytes(true));
 
+    // Make sure all the `R`s are the same
     if !signatures[1..]
         .iter()
         .map(|s| &s.0.as_ref()[..32])
@@ -418,15 +428,15 @@ pub fn aggregate_stake_signatures_and_broadcast(
         return Err(Error::MismatchMessages);
     }
 
-    let deserialize_R = |s: &[u8]| {
+    let deserialize_R = |s| {
         Point::from_bytes(s).map_err(|e| Error::DeserializationFailed {
-            error: crate::serialization::Error::InvalidPoint(e),
+            error: DeserializationError::InvalidPoint(e),
             field_name: "signatures",
         })
     };
-    let deserialize_s = |s: &[u8]| {
+    let deserialize_s = |s| {
         Scalar::from_bytes(s).map_err(|e| Error::DeserializationFailed {
-            error: crate::serialization::Error::InvalidScalar(e),
+            error: DeserializationError::InvalidScalar(e),
             field_name: "signatures",
         })
     };
@@ -441,6 +451,7 @@ pub fn aggregate_stake_signatures_and_broadcast(
         .map(|s| deserialize_s(&s.0.as_ref()[32..]))
         .collect::<Result<_, _>>()?;
 
+    // Add the signatures up
     let full_sig = musig2::aggregate_partial_signatures(&first_sig, &partial_sigs);
 
     let mut sig_bytes = [0u8; 64];
@@ -448,8 +459,16 @@ pub fn aggregate_stake_signatures_and_broadcast(
     sig_bytes[32..].copy_from_slice(&full_sig.s.to_bytes());
     let sig = Signature::new(&sig_bytes);
 
-    let mut tx = create_stake_account_transaction(stake_amount, &seed, &aggpubkey)?;
+    println!("reacted in tss before create_stake_account_transaction");
+    println!(
+        "stake_amount: {:?}, seed: {:?}, aggpubkey: {:?}, vote_account: {:?}",
+        stake_amount, seed, aggpubkey, validator_vote_accont
+    );
+    let mut tx =
+        create_stake_account_transaction(stake_amount, &seed, &aggpubkey, &validator_vote_accont)?;
+    println!("print tx: {:?}", tx);
 
+    // Insert the recent_block_hash and the signature to the right places
     tx.message.recent_blockhash = recent_block_hash;
     assert_eq!(tx.signatures.len(), 1);
     tx.signatures[0] = sig;

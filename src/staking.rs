@@ -15,9 +15,11 @@ pub fn create_stake_account_transaction(
     stake_amount: u64,
     seed: &str,
     payer: &Pubkey,
+    validator_vote_accont: &Pubkey,
 ) -> Result<Transaction, Error> {
     let stake_account = Pubkey::create_with_seed(payer, seed, &solana_sdk::stake::program::id())
         .map_err(|e| Error::InvalidStakeAccountSeed(e.to_string()))?;
+
     let space = std::mem::size_of::<StakeStateV2>() as u64;
     let rent = RpcClient::new("https://api.testnet.solana.com")
         .get_minimum_balance_for_rent_exemption(space as usize)
@@ -42,7 +44,8 @@ pub fn create_stake_account_transaction(
         &Lockup::default(),
     );
 
-    let delegate_ins = stake_instruction::delegate_stake(&stake_account, payer, payer);
+    let delegate_ins =
+        stake_instruction::delegate_stake(&stake_account, payer, validator_vote_accont);
 
     let msg = solana_sdk::message::Message::new(
         &[create_account_ins, initialize_ins, delegate_ins],
